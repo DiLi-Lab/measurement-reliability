@@ -19,7 +19,6 @@ These columns are present in **both ET and SPR** datasets.
 | screen_id                      | 1–n                                      | Integer      | Identifier of the screen on which the word was presented.                                                             |
 | word_id                        | 1–n                                      | Integer      | Identifier of the word within the screen.                                                                             |
 | session_id                     | e.g., “1”                                | String       | Identifier of the recording session.                                                                                  |
-| word                           | token string                             | String       | The word as presented to the participant (surface form).                                                              |
 | w_in_sent_id                   | ≥1                                       | Integer      | Position of the word in the sentence.                                                                                 |
 | word_length                    | ≥1                                       | Integer      | Number of characters in the current word.                                                                             |
 | word_length_word_n_minus_1/-2  | ≥1 or NA                                 | Integer      | Word length of the previous (n-1) or pre-previous (n-2) word.                                                         |
