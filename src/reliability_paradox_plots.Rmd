@@ -1,0 +1,422 @@
+---
+title: "Code to generate reliability paradox-style plots"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries, warning=FALSE, message=FALSE}
+Sys.setlocale("LC_ALL", "en_US.UTF-8")
+source("src/packages.R")
+```
+
+```{r read ET data}
+model_prefix <- paste0("./results/rds_files/")
+fnames <- list.files(path = model_prefix)
+
+df <- data.frame()
+for (f in fnames) {
+  m <- read_rds(paste0(model_prefix, "/", f))
+  if (startsWith(f, "rao")) {
+    mode <- "temporal"
+    mname <- substr(f, 16, nchar(f) - 4)
+    raneff <- ranef(m)$subj_id %>%
+      as.data.frame() %>%
+      mutate(
+        subj_id = rownames(.),
+        measure = mname,
+        mode = mode
+      ) %>%
+      dplyr::select(subj_id, measure, mode, everything()) %>%
+      dplyr::select(-starts_with("Q2.5"), -starts_with("Q97.5")) %>%
+      rename(
+        mu1 = `Estimate.s1`,
+        mu2 = `Estimate.s2`,
+        mu1_len = `Estimate.s1:word_length`,
+        mu2_len = `Estimate.s2:word_length`,
+        mu1_freq = `Estimate.s1:lex_freq`,
+        mu2_freq = `Estimate.s2:lex_freq`,
+        mu1_surp = `Estimate.s1:surprisal`,
+        mu2_surp = `Estimate.s2:surprisal`,
+        mu1_dep = `Estimate.s1:dep_distance`,
+        mu2_dep = `Estimate.s2:dep_distance`,
+        mu1_nlefts = `Estimate.s1:n_lefts`,
+        mu2_nlefts = `Estimate.s2:n_lefts`,
+        sd1 = `Est.Error.s1`,
+        sd2 = `Est.Error.s2`,
+        sd1_len = `Est.Error.s1:word_length`,
+        sd2_len = `Est.Error.s2:word_length`,
+        sd1_freq = `Est.Error.s1:lex_freq`,
+        sd2_freq = `Est.Error.s2:lex_freq`,
+        sd1_surp = `Est.Error.s1:surprisal`,
+        sd2_surp = `Est.Error.s2:surprisal`,
+        sd1_dep = `Est.Error.s1:dep_distance`,
+        sd2_dep = `Est.Error.s2:dep_distance`,
+        sd1_nlefts = `Est.Error.s1:n_lefts`,
+        sd2_nlefts = `Est.Error.s2:n_lefts`
+      )
+  } else {
+    mode <- "methodological"
+    mname <- substr(f, 22, nchar(f) - 4)
+    raneff <- ranef(m)$subj_id %>%
+      as.data.frame() %>%
+      mutate(
+        subj_id = rownames(.),
+        measure = mname,
+        mode = mode
+      ) %>%
+      dplyr::select(subj_id, measure, mode, everything()) %>%
+      dplyr::select(-starts_with("Q2.5"), -starts_with("Q97.5")) %>%
+      rename(
+        mu1 = `Estimate.m1`,
+        mu2 = `Estimate.m2`,
+        mu1_len = `Estimate.m1:word_length`,
+        mu2_len = `Estimate.m2:word_length_word_n_minus_1`,
+        mu1_freq = `Estimate.m1:lex_freq`,
+        mu2_freq = `Estimate.m2:lex_freq_word_n_minus_1`,
+        mu1_surp = `Estimate.m1:surprisal`,
+        mu2_surp = `Estimate.m2:surprisal_word_n_minus_1`,
+        mu1_dep = `Estimate.m1:dep_distance`,
+        mu2_dep = `Estimate.m2:dep_distance_word_n_minus_1`,
+        mu1_nlefts = `Estimate.m1:n_lefts`,
+        mu2_nlefts = `Estimate.m2:n_lefts_word_n_minus_1`,
+        sd1 = `Est.Error.m1`,
+        sd2 = `Est.Error.m2`,
+        sd1_len = `Est.Error.m1:word_length`,
+        sd2_len = `Est.Error.m2:word_length_word_n_minus_1`,
+        sd1_freq = `Est.Error.m1:lex_freq`,
+        sd2_freq = `Est.Error.m2:lex_freq_word_n_minus_1`,
+        sd1_surp = `Est.Error.m1:surprisal`,
+        sd2_surp = `Est.Error.m2:surprisal_word_n_minus_1`,
+        sd1_dep = `Est.Error.m1:dep_distance`,
+        sd2_dep = `Est.Error.m2:dep_distance_word_n_minus_1`,
+        sd1_nlefts = `Est.Error.m1:n_lefts`,
+        sd2_nlefts = `Est.Error.m2:n_lefts_word_n_minus_1`
+      )
+  }
+  df <- bind_rows(df, raneff)
+}
+```
+
+```{r Temporal TFT}
+model <- read_rds("./results/rds_files/rao_no_spillov_TFT.rds")
+fixeff <- as.data.frame(brms::fixef(model))
+```
+
+```{r TFT paradox cor1}
+paradox <- df %>%
+  dplyr::select(-starts_with("sd")) %>%
+  filter(measure == "TFT" & mode == "temporal") %>%
+  mutate(
+    mu1 = mu1 + fixeff["Intercept", "Estimate"],
+    mu2 = mu2 + fixeff["Intercept", "Estimate"],
+    mu1_len = mu1_len + fixeff["word_length", "Estimate"],
+    mu2_len = mu2_len + fixeff["word_length", "Estimate"],
+    mu1_freq = mu1_freq + fixeff["lex_freq", "Estimate"],
+    mu2_freq = mu2_freq + fixeff["lex_freq", "Estimate"],
+    mu1_surp = mu1_surp + fixeff["surprisal", "Estimate"],
+    mu2_surp = mu2_surp + fixeff["surprisal", "Estimate"],
+    mu1_dep = mu1_dep + fixeff["dep_distance", "Estimate"],
+    mu2_dep = mu2_dep + fixeff["dep_distance", "Estimate"],
+    mu1_nlefts = mu1_nlefts + fixeff["n_lefts", "Estimate"],
+    mu2_nlefts = mu2_nlefts + fixeff["n_lefts", "Estimate"]
+  ) %>%
+  rename(
+    mu1_int = mu1,
+    mu2_int = mu2
+  ) %>%
+  pivot_longer(
+    cols = starts_with("mu1_"),
+    names_to = "predictor",
+    values_to = "s1_eff"
+  ) %>%
+  mutate(predictor = gsub("mu1_", "", predictor)) %>%
+  pivot_longer(
+    cols = starts_with("mu2_"),
+    names_to = "s2_pred",
+    values_to = "s2_eff"
+  ) %>%
+  filter(predictor == gsub("mu2_", "", s2_pred)) %>%
+  dplyr::select(-s2_pred) %>%
+  mutate(colour = case_when(
+    subj_id == "zh5" ~ 1,
+    subj_id == "zh27" ~ 2,
+    subj_id == "zh33" ~ 3,
+    subj_id == "zh42" ~ 4,
+    subj_id == "zh49" ~ 5,
+    subj_id == "zh64" ~ 6,
+    subj_id == "pt3" ~ 7,
+    subj_id == "pt20" ~ 8,
+    subj_id == "pt9" ~ 9,
+    subj_id == "pt90" ~ 10,
+    TRUE ~ 999
+  )) %>%
+  mutate(colour = as.factor(colour)) %>%
+  mutate(predictor = factor(predictor,
+    levels = c("int", "len", "freq", "surp", "dep", "nlefts"),
+    labels = c("Intercept", "Word length", "Lexical frequency", "Surprisal", "Dependency distance", "Left dependents")
+  )) %>%
+  mutate(
+    s1_eff = ifelse(s1_eff < 5 & s1_eff > 3.5, 5, s1_eff),
+    s2_eff = ifelse(s2_eff < 5 & s2_eff > 3.5, 5, s2_eff),
+  )
+
+ggplot(paradox, aes(x = s1_eff, y = s2_eff, color = colour)) +
+  geom_point(data = subset(paradox, colour == "999"), shape = 21, size = 1, stroke = 0.3, fill = "grey90", color = "grey70") +
+  geom_point(data = subset(paradox, colour != "999"), size = 1.2) +
+  geom_smooth(method = "lm", color = "#999bea", linetype = "dashed", se = FALSE, size = 0.5) +
+  facet_wrap(~predictor, scales = "free") + # Create facets based on the predictor variable
+  scale_color_manual(values = c(
+    "1" = "#ea999b", # Pink
+    "2" = "#377EB8", # Blue
+    "3" = "#4DAF4A", # Green
+    "4" = "#FF7F00", # Orange
+    "5" = "#984EA3", # Purple
+    "6" = "#FFC107", # Vibrant Gold
+    "7" = "#00CED1", # Dark Turquoise
+    "8" = "#8B0000", # Dark Red
+    "9" = "#FF6347", # Tomato (Red-Orange)
+    "10" = "#8A2BE2",
+    "999" = "grey70"
+  )) + # Soft grey for hollow points
+  labs(
+    x = "Effect size session 1",
+    y = "Effect size session 2"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    strip.background = element_rect(fill = "#adadad", color = "#adadad", size = 0.8),
+    strip.text = element_text(face = "plain", size = 12, color = "white"),
+    panel.border = element_rect(color = "#adadad", fill = NA, size = 0.8)
+  )
+ggsave(filename = "./visualization/indico_temporal_parodox_correlations_1.pdf", width = 12, height = 8, dpi = 300)
+```
+
+```{r TFT paradox cor2}
+set.seed(42)
+
+paradox_long <- paradox %>%
+  dplyr::select(subj_id, predictor, s1_eff, s2_eff, colour) %>%
+  pivot_longer(cols = c(s1_eff, s2_eff), names_to = "session", values_to = "value") %>%
+  mutate(session = recode(session, "s1_eff" = 1, "s2_eff" = 2)) %>%
+  mutate(session = factor(session)) %>%
+  mutate(jittered_x = ifelse(colour == 999 & session == 1,
+    jitter(as.numeric(session), amount = 0.1),
+    ifelse(colour == 999 & session == 2,
+      jitter(as.numeric(session), amount = 0.1),
+      as.numeric(session)
+    )
+  ))
+custom_y_limits <- function(predictor_name) {
+  subset_data <- paradox_long %>% filter(predictor == predictor_name)
+  min_y <- min(subset_data$value)
+  max_y <- max(subset_data$value)
+
+  # Set lower limit to -0.5 if it is greater than -0.5
+  lower_limit <- ifelse(min_y > -0.5, -0.5, min_y)
+
+  return(c(lower_limit, max_y))
+}
+
+ggplot() +
+  # Boxplot without jitter
+  geom_boxplot(data = paradox_long, aes(x = as.numeric(session), y = value, fill = session), alpha = 1, outlier.shape = NA, colour = "black", width = 0.5) +
+  # Add jittered points and connecting lines
+  geom_line(
+    data = paradox_long %>% filter(colour %in% c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")),
+    aes(x = jittered_x, y = value, group = subj_id, color = colour), size = 0.6, alpha = 1
+  ) + # Bolder lines for colors 1-5
+  geom_line(
+    data = paradox_long %>% filter(colour == "999"),
+    aes(x = jittered_x, y = value, group = subj_id, color = colour), size = 0.3, alpha = 0.3
+  ) + # Regular line for color 6
+  geom_point(data = paradox_long %>% filter(colour %in% c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")), aes(x = jittered_x, y = value, color = colour), size = 1.5, alpha = 1) +
+  geom_point(data = paradox_long %>% filter(colour == "999"), aes(x = jittered_x, y = value, color = colour), size = 1, alpha = 0.3) +
+  facet_wrap(~predictor, scales = "free") +
+  scale_color_manual(values = c(
+    "1" = "#ea999b", # Pink
+    "2" = "#377EB8", # Blue
+    "3" = "#4DAF4A", # Green
+    "4" = "#FF7F00", # Orange
+    "5" = "#984EA3", # Purple
+    "6" = "#FFC107", # Vibrant Gold
+    "7" = "#00CED1", # Dark Turquoise
+    "8" = "#8B0000", # Dark Red
+    "9" = "#FF6347", # Tomato (Red-Orange)
+    "10" = "#8A2BE2",
+    "999" = "grey70"
+  )) + # Grey for colour 6
+  scale_x_discrete(labels = c("Session 1", "Session 2")) +
+  labs(x = "", y = "Effect size") +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    strip.background = element_rect(fill = "#adadad", color = "#adadad", size = 0.8),
+    strip.text = element_text(face = "plain", size = 12, color = "white"),
+    panel.border = element_rect(color = "#adadad", fill = NA, size = 0.8)
+  )
+ggsave(filename = "./visualization/indico_temporal_parodox_correlations_2.pdf", width = 12, height = 10, dpi = 300)
+```
+
+```{r Methodological FPRT}
+model_meth <- read_rds("./results/rds_files/ram_spillover_spr_vs_TFT.rds")
+fixeff_meth <- as.data.frame(brms::fixef(model_meth))
+```
+
+```{r TFT paradox cor1}
+paradox_meth <- df %>%
+  dplyr::select(-starts_with("sd")) %>%
+  filter(measure == "TFT" & mode == "methodological") %>%
+  mutate(
+    mu1 = mu1 + fixeff["Intercept", "Estimate"],
+    mu2 = mu2 + fixeff["Intercept", "Estimate"],
+    mu1_len = mu1_len + fixeff["word_length", "Estimate"],
+    mu2_len = mu2_len + fixeff["word_length", "Estimate"],
+    mu1_freq = mu1_freq + fixeff["lex_freq", "Estimate"],
+    mu2_freq = mu2_freq + fixeff["lex_freq", "Estimate"],
+    mu1_surp = mu1_surp + fixeff["surprisal", "Estimate"],
+    mu2_surp = mu2_surp + fixeff["surprisal", "Estimate"],
+    mu1_dep = mu1_dep + fixeff["dep_distance", "Estimate"],
+    mu2_dep = mu2_dep + fixeff["dep_distance", "Estimate"],
+    mu1_nlefts = mu1_nlefts + fixeff["n_lefts", "Estimate"],
+    mu2_nlefts = mu2_nlefts + fixeff["n_lefts", "Estimate"]
+  ) %>%
+  rename(
+    mu1_int = mu1,
+    mu2_int = mu2
+  ) %>%
+  pivot_longer(
+    cols = starts_with("mu1_"),
+    names_to = "predictor",
+    values_to = "s1_eff"
+  ) %>%
+  mutate(predictor = gsub("mu1_", "", predictor)) %>%
+  pivot_longer(
+    cols = starts_with("mu2_"),
+    names_to = "s2_pred",
+    values_to = "s2_eff"
+  ) %>%
+  filter(predictor == gsub("mu2_", "", s2_pred)) %>%
+  dplyr::select(-s2_pred) %>%
+  mutate(colour = case_when(
+    subj_id == "zh5" ~ 1,
+    subj_id == "zh27" ~ 2,
+    subj_id == "zh33" ~ 3,
+    subj_id == "zh42" ~ 4,
+    subj_id == "zh49" ~ 5,
+    subj_id == "zh64" ~ 6,
+    subj_id == "pt3" ~ 7,
+    subj_id == "pt20" ~ 8,
+    subj_id == "pt9" ~ 9,
+    subj_id == "pt74" ~ 10,
+    TRUE ~ 999
+  )) %>%
+  mutate(colour = as.factor(colour)) %>%
+  mutate(predictor = factor(predictor,
+    levels = c("int", "len", "freq", "surp", "dep", "nlefts"),
+    labels = c("Intercept", "Word length", "Lexical frequency", "Surprisal", "Dependency distance", "Left dependents")
+  ))
+
+
+ggplot(paradox_meth, aes(x = s1_eff, y = s2_eff, color = colour)) +
+  geom_point(data = subset(paradox_meth, colour == "999"), shape = 21, size = 1, stroke = 0.3, fill = "grey90", color = "grey70") +
+  geom_point(data = subset(paradox_meth, colour != "999"), size = 1.2) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey70", size = 0.5) +
+  geom_smooth(method = "lm", color = "#999bea", linetype = "dashed", se = FALSE, size = 0.5) +
+  facet_wrap(~predictor, scales = "free") + # Create facets based on the predictor variable
+  scale_color_manual(values = c(
+    "1" = "#ea999b", # Pink
+    "2" = "#377EB8", # Blue
+    "3" = "#4DAF4A", # Green
+    "4" = "#FF7F00", # Orange
+    "5" = "#984EA3", # Purple
+    "6" = "#FFC107", # Vibrant Gold
+    "7" = "#00CED1", # Dark Turquoise
+    "8" = "#8B0000", # Dark Red
+    "9" = "#FF6347", # Tomato (Red-Orange)
+    "10" = "#8A2BE2",
+    "999" = "grey70"
+  )) + # Soft grey for hollow points
+  labs(
+    x = "Effect size EyeTr.",
+    y = "Effect size SPR"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    strip.background = element_rect(fill = "#adadad", color = "#adadad", size = 0.8),
+    strip.text = element_text(face = "plain", size = 12, color = "white"),
+    panel.border = element_rect(color = "#adadad", fill = NA, size = 0.8)
+  )
+ggsave(filename = "./visualization/indico_methodological_parodox_correlations_1.pdf", width = 12, height = 8, dpi = 300)
+```
+
+```{r FPRT paradox cor2}
+set.seed(42)
+
+paradox_meth_long <- paradox_meth %>%
+  dplyr::select(subj_id, predictor, s1_eff, s2_eff, colour) %>%
+  pivot_longer(cols = c(s1_eff, s2_eff), names_to = "session", values_to = "value") %>%
+  mutate(session = recode(session, "s1_eff" = 1, "s2_eff" = 2)) %>%
+  mutate(session = factor(session)) %>%
+  mutate(jittered_x = ifelse(colour == 999 & session == 1,
+    jitter(as.numeric(session), amount = 0.1),
+    ifelse(colour == 999 & session == 2,
+      jitter(as.numeric(session), amount = 0.1),
+      as.numeric(session)
+    )
+  ))
+
+ggplot() +
+  # Boxplot without jitter
+  geom_boxplot(data = paradox_meth_long, aes(x = session, y = value, fill = session), alpha = 1, outlier.shape = NA, colour = "black", width = 0.5) +
+  # Add jittered points and connecting lines
+  geom_line(
+    data = paradox_meth_long %>% filter(colour %in% c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")),
+    aes(x = jittered_x, y = value, group = subj_id, color = colour), size = 0.6, alpha = 1
+  ) + # Bolder lines for colors 1-5
+  geom_line(
+    data = paradox_meth_long %>% filter(colour == "999"),
+    aes(x = jittered_x, y = value, group = subj_id, color = colour), size = 0.3, alpha = 0.3
+  ) + # Regular line for color 6
+  geom_point(data = paradox_meth_long %>% filter(colour %in% c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10")), aes(x = jittered_x, y = value, color = colour), size = 1.5, alpha = 1) +
+  geom_point(data = paradox_meth_long %>% filter(colour == "999"), aes(x = jittered_x, y = value, color = colour), size = 1, alpha = 0.3) +
+  facet_wrap(~predictor, scales = "free") +
+  scale_color_manual(values = c(
+    "1" = "#ea999b", # Pink
+    "2" = "#377EB8", # Blue
+    "3" = "#4DAF4A", # Green
+    "4" = "#FF7F00", # Orange
+    "5" = "#984EA3", # Purple
+    "6" = "#FFC107", # Vibrant Gold
+    "7" = "#00CED1", # Dark Turquoise
+    "8" = "#8B0000", # Dark Red
+    "9" = "#FF6347", # Tomato (Red-Orange)
+    "10" = "#8A2BE2",
+    "999" = "grey70"
+  )) + # Grey for colour 6
+  scale_x_discrete(labels = c("ET (TFT)", "SPR")) + # Proper x-axis labels
+  labs(x = "", y = "Effect size") +
+  theme_minimal() + # Clean theme
+  theme(
+    legend.position = "none",
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 13),
+    axis.text = element_text(size = 10),
+    strip.background = element_rect(fill = "#adadad", color = "#adadad", size = 0.8),
+    strip.text = element_text(face = "plain", size = 12, color = "white"),
+    panel.border = element_rect(color = "#adadad", fill = NA, size = 0.8)
+  )
+ggsave(filename = "./visualization/indico_methodological_parodox_correlations_2.pdf", width = 12, height = 10, dpi = 300)
+```

@@ -1,0 +1,243 @@
+---
+title: "Reliability paradox simulation"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## import libraries
+```{r library}
+source("src/packages.R")
+```
+
+## real data
+```{r Check with empirical data}
+et <- read.csv("../data/fit_input/et_only.csv", header=TRUE, row.names=1)
+
+ggplot(et, aes(x = word_length)) +
+  geom_density()
+
+temp <- et %>% filter(TFT > 0)
+
+m0 <- lm(TFT ~ 1 + word_length, data = temp)
+m0
+```
+
+```{r}
+set.seed(42)
+
+n_words <- 200
+
+len_words <- rnorm(n_words, 0, 2)
+true_eff <- 10
+true_dv <- 0 + len_words * true_eff
+
+true_df <- data.frame(
+  word_id = 1:200,
+  len_words = len_words,
+  true_dv = true_dv
+)
+
+m1 <- lm(true_dv ~ len_words, data = true_df)
+m1
+```
+
+```{r CONSTANT}
+set.seed(123)
+# Parameters
+n_subj <- 100  # Number of participants
+true_eff <- 10  # Mean true effect for the population
+mu <- c(true_eff, true_eff)
+noise_sd <- rep(5, n_subj)
+# noise_sd <- sample(5:5, n_subj, replace = TRUE)
+# noise_sd
+n_words <- 5
+rho <- 0.95
+```
+
+```{r High variant pop}
+set.seed(429)
+options(scipen = 999)
+
+# Generate len_words as dummy predictor
+len_words <- rnorm(n_words, mean = 0, sd = 2)
+len_words_all <- rep(len_words, times = n_subj)
+participant_id <- rep(1:n_subj, each = length(len_words))
+word_id <- rep(1:length(len_words), times = n_subj)
+
+# Define the mean and covariance matrix for the multivariate normal distribution
+sigma <- matrix(c(80^2, rho * 80^2, rho * 80^2, 80^2), nrow = 2)
+
+# Generate correlated true effects for the two sessions
+high_pop_true <- MASS::mvrnorm(n = n_subj, mu = mu, Sigma = sigma)
+cor.test(high_pop_true[,1], high_pop_true[, 2])
+
+# Extract high_pop1_true and high_pop2_true
+high_pop1_true <- high_pop_true[, 1]
+high_pop2_true <- high_pop_true[, 2]
+
+# Create high_pop1_noisy by adding participant-specific noise to high_pop1_true
+high_pop1_noisy <- unlist(sapply(1:n_subj, function(i) {
+  high_pop1_true[i] + rnorm(length(len_words), mean = 0, sd = noise_sd[i])
+}))
+
+high_pop2_noisy <- unlist(sapply(1:n_subj, function(i) {
+  high_pop2_true[i] + rnorm(length(len_words), mean = 0, sd = noise_sd[i])
+}))
+
+high_pop1_means <- colMeans(high_pop1_noisy)
+high_pop2_means <- colMeans(high_pop2_noisy)
+
+high_pop1_noisy_flatten <- c(high_pop1_noisy)
+high_pop2_noisy_flatten <- c(high_pop2_noisy)
+
+# Calculate the dvs for each participant and word
+high_pop1_dv <- 0 + high_pop1_noisy_flatten * len_words_all
+high_pop2_dv <- 0 + high_pop2_noisy_flatten * len_words_all
+
+# Create data frames combining participant IDs, word IDs, and repeated word lengths for both sessions
+hpop1 <- data.frame(
+  session = "Session 1",
+  var = "High variance",
+  subj_id = participant_id,
+  word_id = word_id,
+  len_words = len_words_all,
+  effect = high_pop1_noisy_flatten,
+  dv = high_pop1_dv
+)
+
+hpop2 <- data.frame(
+  session = "Session 2",
+  var = "High variance",
+  subj_id = participant_id,
+  word_id = word_id,
+  len_words = len_words_all,
+  effect = high_pop2_noisy_flatten,
+  dv = high_pop2_dv
+)
+
+hpop <- rbind(hpop1, hpop2) %>% mutate(s1 = ifelse(session == "Session 1", 1, 0),
+             s2 = ifelse(session == "Session 2", 1, 0))
+
+```
+
+```{r Low variant pop}
+set.seed(135)
+options(scipen = 999)
+
+# population 2: low variance
+
+sigma <- matrix(c(1^2, rho * 1^2, rho * 1^2, 1^2), nrow = 2)
+
+# Generate correlated true effects for the two sessions
+low_pop_true <- MASS::mvrnorm(n = n_subj, mu = mu, Sigma = sigma)
+cor.test(low_pop_true[,1], low_pop_true[, 2])
+
+low_pop1_true <- low_pop_true[, 1]
+low_pop2_true <- low_pop_true[, 2]
+
+# Create high_pop1_noisy by adding participant-specific noise to high_pop1_true
+low_pop1_noisy <- unlist(sapply(1:n_subj, function(i) {
+  low_pop1_true[i] + rnorm(length(len_words), mean = 0, sd = noise_sd[i])
+}))
+
+low_pop2_noisy <- unlist(sapply(1:n_subj, function(i) {
+  low_pop2_true[i] + rnorm(length(len_words), mean = 0, sd = noise_sd[i])
+}))
+
+low_pop1_means <- colMeans(low_pop1_noisy)
+low_pop2_means <- colMeans(low_pop2_noisy)
+
+low_pop1_noisy_flatten <- c(low_pop1_noisy)
+low_pop2_noisy_flatten <- c(low_pop2_noisy)
+
+low_pop1_dv <- 0 + low_pop1_noisy_flatten * len_words_all
+low_pop2_dv <- 0 + low_pop2_noisy_flatten * len_words_all
+
+# Create data frames combining participant IDs, word IDs, and repeated word lengths for both sessions
+lpop1 <- data.frame(
+  session = "Session 1",
+  var = "Low variance",
+  subj_id = participant_id,
+  word_id = word_id,
+  len_words = len_words_all,
+  effect = low_pop1_noisy_flatten,
+  dv = low_pop1_dv
+)
+
+lpop2 <- data.frame(
+  session = "Session 2",
+  var = "Low variance",
+  subj_id = participant_id,
+  word_id = word_id,
+  len_words = len_words_all,
+  effect = low_pop2_noisy_flatten,
+  dv = low_pop2_dv
+)
+
+lpop <- rbind(lpop1, lpop2) %>% mutate(s1 = ifelse(session == "Session 1", 1, 0),
+             s2 = ifelse(session == "Session 2", 1, 0))
+```
+
+```{r}
+cols <- qualitative_hcl(5, palette = "Set 3")[c(2,4)]
+cols2 <- qualitative_hcl(8, palette = "Dark 3")
+
+hplot <- hpop %>% group_by(session, var, subj_id) %>%
+  summarise(effect = mean(effect)) %>%
+  ungroup()
+
+lplot <- lpop %>% group_by(session, var, subj_id) %>%
+  summarise(effect = mean(effect)) %>%
+  ungroup()
+
+plot <- rbind(hplot, lplot) %>%
+  mutate(session = factor(session))
+```
+
+
+```{r}
+display_points <- plot[c(1:8, 101:108, 201:208, 301:308),]
+
+y_limits <- range(c(plot$effect), na.rm = TRUE)
+p1 <- plot %>%
+  ggplot(aes(x=factor(session),y=effect, fill=factor(session))) +
+  geom_boxplot(outlier.colour=NA, alpha=0.8) +
+  geom_line(aes(group=factor(subj_id)), position = position_dodge(0.2), alpha=0.2) +
+  geom_line(data=display_points, aes(group=factor(subj_id), color=factor(subj_id)), position = position_dodge(0.2), linewidth=0.8) +
+  geom_point(aes(fill=factor(session),group=factor(subj_id)), position = position_dodge(0.2), alpha=0.1) +
+  geom_point(data=display_points, aes(fill=factor(session),group=factor(subj_id), color=factor(subj_id)), position = position_dodge(0.2)) +
+  scale_color_manual(values=cols2) +
+  xlab("") + ylab ("Effect size") +
+  facet_wrap(.~factor(var), scales="free_y") +
+  theme_light() +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank()) +  ylim(y_limits)
+p1
+ggsave(filename = "./visualization/new/high_vs_low_variance_words5.pdf", width = 6, height = 5, dpi=300)
+
+```
+
+```{r}
+plot_wide <- spread(plot, session, effect)
+display_points_scatter <- plot_wide[c(1:8, 101:108),]
+
+p2 <- ggplot(plot_wide, aes(x=`Session 1`, y=`Session 2`)) + 
+  geom_point(alpha=0.1)+
+  geom_point(data=display_points_scatter, aes(group=factor(subj_id), color=factor(subj_id))) +
+  geom_line(stat="smooth",method = "lm",
+            size = 0.5,
+            linetype ="dashed",
+            alpha = 0.6, color="blue") +
+  facet_wrap(.~factor(var), scales="free") +
+  theme_light() +
+  theme(legend.position = "none",
+        strip.background = element_blank(),
+        strip.text.x = element_blank())
+p2
+ggsave(filename = "./visualization/new/high_vs_low_variance_scatter_words3000.pdf", width = 6, height = 3, dpi=300)
+
+```
+

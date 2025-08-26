@@ -1,0 +1,318 @@
+---
+title: "Replicate me if you can: Create plots and tables."
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries, warning=FALSE, message=FALSE}
+# Set locale to English
+Sys.setlocale("LC_ALL", "en_US.UTF-8")
+
+# !/usr/bin/env Rscript
+source("src/packages.R")
+```
+
+
+```{r read ET model, warning=FALSE}
+model_prefix <- paste0("./results/rds_files/")
+fnames <- list.files(path = model_prefix, pattern = "*.rds", full.names = FALSE)
+
+#  Extract correlation coefficients between session 1 and 2 for the different psycholinguistic predictors
+df <- data.frame()
+for (f in fnames) {
+  m <- read_rds(paste0(model_prefix, "/", f))
+  if (startsWith(f, "rao")) {
+    mode <- "temporal"
+    mname <- substr(f, 16, nchar(f) - 4)
+    posterior_correlations <- as_draws_df(m) %>%
+      mutate(
+        measure = mname,
+        mode = mode,
+        cor_int = `cor_subj_id__s1__s2`,
+        cor_len = `cor_subj_id__s1:word_length__s2:word_length`,
+        cor_freq = `cor_subj_id__s1:lex_freq__s2:lex_freq`,
+        cor_surp = `cor_subj_id__s1:surprisal__s2:surprisal`,
+        cor_dep = `cor_subj_id__s1:dep_distance__s2:dep_distance`,
+        cor_nlefts = `cor_subj_id__s1:n_lefts__s2:n_lefts`
+      ) %>%
+      dplyr::select(measure, mode, cor_int, cor_len, cor_freq, cor_surp, cor_dep, cor_nlefts)
+  } else {
+    mode <- "methodological"
+    mname <- substr(f, 22, nchar(f) - 4)
+    posterior_correlations <- as_draws_df(m) %>%
+      mutate(
+        measure = mname,
+        mode = mode,
+        cor_int = `cor_subj_id__m1__m2`,
+        cor_len = `cor_subj_id__m1:word_length__m2:word_length`,
+        cor_freq = `cor_subj_id__m1:lex_freq__m2:lex_freq`,
+        cor_surp = `cor_subj_id__m1:surprisal__m2:surprisal`,
+        cor_dep = `cor_subj_id__m1:dep_distance__m2:dep_distance`,
+        cor_nlefts = `cor_subj_id__m1:n_lefts__m2:n_lefts`,
+        cor_so_len = `cor_subj_id__m1:word_length__m2:word_length_word_n_minus_1`,
+        cor_so_freq = `cor_subj_id__m1:lex_freq__m2:lex_freq_word_n_minus_1`,
+        cor_so_surp = `cor_subj_id__m1:surprisal__m2:surprisal_word_n_minus_1`,
+        cor_so_dep = `cor_subj_id__m1:dep_distance__m2:dep_distance_word_n_minus_1`,
+        cor_so_nlefts = `cor_subj_id__m1:n_lefts__m2:n_lefts_word_n_minus_1`
+      ) %>%
+      dplyr::select(measure, mode, cor_int, cor_len, cor_freq, cor_surp, cor_dep, cor_nlefts, cor_so_len, cor_so_freq, cor_so_surp, cor_so_dep, cor_so_nlefts)
+  }
+  df <- bind_rows(df, posterior_correlations)
+}
+
+write_csv(df, "./results/stats/measurement_reliability_cor.csv")
+
+df_long <- df %>%
+  pivot_longer(
+    cols = starts_with("cor_"),
+    names_to = c("spillover", ".value"),
+    names_pattern = "cor_(so_)?(int|len|freq|surp|dep|nlefts)"
+  )
+df_long$spillover <- ifelse(df_long$spillover == "so_", TRUE, FALSE)
+df_long$spillover <- factor(df_long$spillover, levels = c(FALSE, TRUE), labels = c("Local", "Spillover"))
+```
+
+```{r get tables}
+#  Create tables with reliability coefficients
+target_rows_rao <- c(
+  cor_int = "cor(s1,s2)",
+  cor_len = "cor(s1:word_length,s2:word_length)",
+  cor_freq = "cor(s1:lex_freq,s2:lex_freq)",
+  cor_surp = "cor(s1:surprisal,s2:surprisal)",
+  cor_dep = "cor(s1:dep_distance,s2:dep_distance)",
+  cor_nlefts = "cor(s1:n_lefts,s2:n_lefts)"
+)
+
+target_rows_ram <- c(
+  cor_int = "cor(m1,m2)",
+  cor_len = "cor(m1:word_length,m2:word_length_word_n_minus_1)",
+  cor_freq = "cor(m1:lex_freq,m2:lex_freq_word_n_minus_1)",
+  cor_surp = "cor(m1:surprisal,m2:surprisal_word_n_minus_1)",
+  cor_dep = "cor(m1:dep_distance,m2:dep_distance_word_n_minus_1)",
+  cor_nlefts = "cor(m1:n_lefts,m2:n_lefts_word_n_minus_1)"
+)
+
+format_entry <- function(row) {
+  est <- row["Estimate"]
+  ci_low <- row["l-95% CI"]
+  ci_high <- row["u-95% CI"]
+  sig <- (ci_low > 0) | (ci_high < 0)
+
+  est_str <- sprintf("%.2f", est)
+  ci_low_str <- sprintf("%.2f", ci_low)
+  ci_high_str <- sprintf("%.2f", ci_high)
+
+  if (sig) {
+    sprintf("\\sigestci{%s}{%s}{%s}", est_str, ci_low_str, ci_high_str)
+  } else {
+    sprintf("\\nonsigestci{%s}{%s}{%s}", est_str, ci_low_str, ci_high_str)
+  }
+}
+
+# Extract a row of formatted correlation cells for one model
+extract_model_row_from_summary <- function(cor_df, target_rows) {
+  sapply(target_rows, function(name) {
+    row <- cor_df[rownames(cor_df) == name, ]
+    if (nrow(row) == 0) {
+      "\\makecell{-- \\\\ {--}}"
+    } else {
+      format_entry(row)
+    }
+  }) %>% paste(collapse = " & ")
+}
+
+table_rows <- c()
+
+for (f in fnames) {
+  m <- read_rds(file.path(model_prefix, f))
+  sum_mod <- summary(m)
+
+  # Determine mode and label
+  if (startsWith(f, "rao")) {
+    mode <- "temporal"
+    mname <- substr(f, 16, nchar(f) - 4)
+    target_rows <- target_rows_rao
+  } else {
+    mode <- "methodological"
+    mname <- substr(f, 22, nchar(f) - 4)
+    target_rows <- target_rows_ram
+  }
+
+  # Label for LaTeX table (can refine based on mname if needed)
+  label <- sprintf("\\makecell{\\textbf{%s}}", mname)
+
+  # Extract correlations
+  cor_df <- as.data.frame(sum_mod$random$subj_id)
+  row <- extract_model_row_from_summary(cor_df, target_rows)
+
+  # Append to table
+  table_rows <- c(table_rows, paste(label, "&", row, "\\\\"))
+}
+
+# Combine into full table body
+cat(paste(table_rows, collapse = "\n"))
+```
+
+```{r PLOT functions}
+my_cols <- qualitative_hcl(6, palette = "Pastel 1")[1:6]
+my_cols_cross <- sequential_hcl(7, palette = "Heat 2")[c(3, 6)]
+
+posterior_meth_corr_plot_appendix <- function(rho_df, colours) {
+  rho_p <- ggplot(rho_df, aes(y = correlation, x = effect)) +
+    stat_halfeye(
+      aes(fill = spillover, fill_ramp = after_stat(level)),
+      .width = c(.50, .80, .95),
+      position = "dodgejust", normalize = "groups"
+    ) +
+    scale_fill_ramp_discrete(na.translate = FALSE) +
+    scale_x_discrete(labels = function(x) {
+      stringr::str_wrap(x, width = 10)
+    }) +
+    scale_fill_manual(values = colours) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey51") +
+    facet_wrap(~measure, ncol = 1) +
+    guides(fill = guide_legend(title = "SPR effect:"), fill_ramp = guide_legend(title = "Credible Interval: ")) +
+    xlab("") +
+    ylab("Posterior correlation coefficient") +
+    theme_light() +
+    theme(
+      legend.text = element_text(size = 12),
+      legend.title = element_text(size = 12), axis.title = element_text(size = 12), axis.text = element_text(size = 12),
+      strip.text = element_text(size = 12),
+      panel.spacing = unit(1, "lines")
+    )
+  return(rho_p)
+}
+
+posterior_meth_corr_plot <- function(rho_df, colours) {
+  rho_p <- ggplot(rho_df, aes(y = correlation, x = effect)) +
+    stat_halfeye(
+      aes(fill_ramp = after_stat(level), fill = colours[1]),
+      .width = c(.50, .80, .95),
+      position = "dodgejust", normalize = "groups"
+    ) +
+    scale_fill_ramp_discrete(na.translate = FALSE) +
+    scale_x_discrete(labels = function(x) {
+      stringr::str_wrap(x, width = 10)
+    }) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey51") +
+    facet_wrap(~measure, ncol = 3) +
+    guides(fill_ramp = guide_legend(title = "Credible Interval: "), fill = "none") +
+    xlab("") +
+    ylab("Posterior correlation coefficient") +
+    theme_light() +
+    theme(
+      legend.text = element_text(size = 12),
+      legend.title = element_text(size = 12), axis.title = element_text(size = 12), axis.text = element_text(size = 12),
+      axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom", legend.box = "horizontal",
+      strip.text = element_text(size = 12),
+      panel.spacing = unit(1, "lines")
+    )
+  return(rho_p)
+}
+
+
+posterior_corr_plot <- function(rho_df, colours, n_cols = 2) {
+  rho_df_no_intercept <- rho_df %>%
+    filter(effect != "Intercept")
+  rho_p <- ggplot(rho_df_no_intercept, aes(y = correlation, x = effect)) +
+    stat_halfeye(
+      aes(fill = timing, fill_ramp = after_stat(level)),
+      .width = c(.50, .80, .95),
+      position = "dodgejust", normalize = "groups"
+    ) +
+    scale_fill_ramp_discrete(na.translate = FALSE) +
+    scale_x_discrete(labels = function(x) {
+      stringr::str_wrap(x, width = 10)
+    }) +
+    scale_fill_manual(values = colours) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "grey51") +
+    facet_wrap(~measure, ncol = n_cols) +
+    guides(fill = guide_legend(title = "Type of measure: "), fill_ramp = guide_legend(title = "Credible Interval: ")) +
+    xlab("") +
+    ylab("Posterior correlation coefficient") +
+    theme_light() +
+    theme(
+      legend.text = element_text(size = 12),
+      legend.title = element_text(size = 12), axis.title = element_text(size = 12), axis.text = element_text(size = 12),
+      axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "bottom", legend.box = "horizontal",
+      strip.text = element_text(size = 12),
+      panel.spacing = unit(1, "lines")
+    )
+  return(rho_p)
+}
+
+create_et_plot <- function(rho_df) {
+  p_out <- posterior_corr_plot(rho_df, colours = my_cols, n_cols = 4)
+  return(p_out)
+}
+
+create_crossm_plot <- function(rho_df) {
+  p_out <- posterior_meth_corr_plot(rho_df, colours = my_cols_cross)
+  return(p_out)
+}
+
+create_crossm_plot_appendix <- function(rho_df) {
+  p_out <- posterior_meth_corr_plot_appendix(rho_df, colours = my_cols_cross)
+  return(p_out)
+}
+```
+
+
+```{r Plot reliability across measurement occasions}
+#  
+df$timing <- ifelse(df$measure %in% c("FFD", "FPRT", "FPReg"), "First-pass ET measure",
+  ifelse(df$measure %in% c("TFT", "N_FIX", "SKIP", "RPD"), "Global ET measure", "Self-paced reading")
+)
+
+tcorr_posteriors <- df %>%
+  filter(mode == "temporal") %>%
+  dplyr::select(-cor_so_len, -cor_so_freq, -cor_so_surp, -cor_so_dep, -cor_so_nlefts) %>%
+  pivot_longer(
+    cols = cor_int:cor_nlefts,
+    names_to = "effect",
+    values_to = "correlation"
+  ) %>%
+  mutate(
+    effect = factor(effect,
+      levels = c("cor_int", "cor_len", "cor_freq", "cor_surp", "cor_dep", "cor_nlefts"),
+      labels = c("Intercept", "Word length", "Lexical frequency", "Surprisal", "Dependency distance", "Left dependents")
+    ),
+    measure = factor(measure,
+      levels = c("FFD", "FPRT", "RPD", "TFT", "N_FIX", "SKIP", "FPReg", "SPR")
+    )
+  )
+
+p_et <- create_et_plot(tcorr_posteriors)
+p_et
+ggsave(p_et, filename = "./visualization/indico_temporal_correlations.pdf", width = 12, height = 8, dpi = 300)
+ ```
+
+```{r Plot reliability across methods}
+mcorr_posteriors <- df_long %>%
+  filter(mode == "methodological") %>%
+  pivot_longer(
+    cols = c("int", "len", "freq", "surp", "dep", "nlefts"),
+    names_to = "effect",
+    values_to = "correlation"
+  ) %>%
+  mutate(
+    effect = factor(effect,
+      levels = c("int", "len", "freq", "surp", "dep", "nlefts"),
+      labels = c("Intercept", "Word length", "Lexical frequency", "Surprisal", "Dependency distance", "Left dependents")
+    ),
+    measure = factor(measure,
+      levels = c("FPRT", "RPD", "TFT"), labels = c("FPRT vs. SPR", "RPD vs. SPR", "TFT vs. SPR")
+    )
+  )
+mcorr_posteriors <- mcorr_posteriors %>%
+  filter(spillover == "Spillover" | (spillover == "Local" & effect == "Intercept"))
+
+
+p_et_spr <- create_crossm_plot(mcorr_posteriors)
+p_et_spr
+
+ggsave(p_et_spr, filename = "./visualization/indico_methodological_correlations.pdf", width = 11, height = 5, dpi = 300)
+```
