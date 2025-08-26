@@ -82,15 +82,9 @@ These scripts fit Bayesian correlation models to estimate the reliability of ind
 
 To reproduce the figures and tables in the paper:
 
-- **Posterior correlations and summary tables:**  
-  ```R
-  "src/posterior_correlation_plot.Rmd"
-  ```
+- **Posterior correlations and summary tables:**  `src/posterior_correlation_plot.Rmd`
 
-- **Reliability paradox visualizations:**  
-  ```R
-  "src/reliability_paradox_plot_psy_correlation.Rmd"
-  ```
+- **Reliability paradox visualizations:**  `src/reliability_paradox_plot_psy_correlation.Rmd`
 
 Both scripts will generate figures and tables corresponding to those reported in the paper.
 
