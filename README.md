@@ -50,7 +50,7 @@ sh pull_data.sh
 │   ├── reliability_paradox_plots.Rmd          # Visualization of the results in the style of the reliability paradox
 │   └── paradox_simulation.Rmd                 # Simulate and visualize the reliability paradox
 └── stimuli
-    └── lexical_features.csv   # Annotated lexical features used in some analyses
+    └── lexical_features.csv   # Annotated lexical features
 ```
 
 ---
