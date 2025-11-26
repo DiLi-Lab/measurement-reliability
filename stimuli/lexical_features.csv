@@ -1,4 +1,4 @@
-,text_number,screen_number,sentence_number,w_in_sent_id,w_in_screen_id,deps,n_rights,n_lefts,dep_distance,word_length,surprisal_gpt,contains_punctuation,lex_freq_unk,lex_freq,PoS-Tag
+,text_number,screen_number,sentence_number,w_in_sent_id,w_in_screen_id,deps,n_rights,n_lefts,dep_distance,word_length,surprisal_gpt,contains_punctuation,lex_freq_unk,lex_freq,pos_tag
 0,1,1,1,1,1,mo,0,0,-5,5,9.441618919372559,FALSE,FALSE,37.57266307,pwav
 1,1,1,1,2,2,ROOT,3,0,0,4,4.811712265014648,FALSE,FALSE,8998.096899,vafin
 2,1,1,1,3,3,oa,0,0,-3,4,2.318830966949463,FALSE,FALSE,6566.550453,prf
