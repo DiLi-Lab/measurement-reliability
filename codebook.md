@@ -15,8 +15,8 @@ These columns are present in **both ET and SPR** datasets.
 | Column name | Value type | Description |
 |--------------------------------|--------------|-----------------------------------------------------------------------------------------------------------------------|
 | subj_id | String | Unique participant identifier. Prefix indicates data collection site (zh = Zürich, pt = Potsdam). |
-| text_id | Integer | Identifier of the text stimulus. |
-| screen_id | Integer | Identifier of the screen on which the word was presented. |
+| text_id | Integer | Identifier of the text stimulus (16 texts in total). |
+| screen_id | Integer | Identifier of the screen (each text was split into 6 screens, including title screen). |
 | word_id | Integer | Identifier of the word within the screen. |
 | session_id | String | Identifier of the recording session. |
 | w_in_sent_id | Integer | Position of the word in the sentence. |
