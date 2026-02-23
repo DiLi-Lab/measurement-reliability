@@ -1,5 +1,8 @@
-curl -L -o data_results.zip https://drive.switch.ch/index.php/s/faxvHpFurfjKSfo/download
-unzip data_results.zip
+#!/bin/bash
 
-rm -rf data_results
+curl -L --fail -C - -o data_results.zip \
+  --retry 20 --retry-delay 5 --retry-all-errors \
+  "https://drive.switch.ch/index.php/s/faxvHpFurfjKSfo/download"
+
+unzip data_results
 rm data_results.zip
